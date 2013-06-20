@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<settings>
+
+    <!-- General -->
+	<category label="30051" id="category.general">
+        <setting label="30100" type="lsep"/>
+        <setting label="30110" type="enum" id="startup.category" default="0" lvalues="30111|30112|30113|30114|30115|30116|30117|30118|30119|30120|30121|30122|30123"/>
+        <setting label="30130" subsetting="true" type="text" id="startup.category.text" default="" enable="IntegerGreaterThan(Addon.Setting(startup.category),0) + !IntegerGreaterThan(Addon.Setting(startup.category),5)"/>
+        <setting label="30101" type="lsep"/>
+        <setting label="30135" type="folder" id="source.cache.path" default="special://masterprofile/addon_data/$ID/" source="auto" option="writeable"/>
+        <setting label="30140" type="enum" id="source.schedule.when" default="0" lvalues="30141|30142|30143|30144|30145|30146|30147|30148|30149"/>
+        <setting label="30150" subsetting="true" type="enum" id="source.schedule.time" default="2" values="$HOURS" enable="IntegerGreaterThan(Addon.Setting(source.schedule.when),0)"/>
+        <setting label="30155" subsetting="true" type="bool" id="download.new.trailers" default="false" enable="IntegerGreaterThan(Addon.Setting(source.schedule.when),0) + !IsEmpty(Addon.Setting(trailer.save.folder))"/>
+        <!-- setting label="30160" subsetting="true" type="slider" id="download.trailers.limit" default="5" range="5,1,20" format="%1.f $ADDON[$ID 30162],,$ADDON[$ID 30161]" enable="IntegerGreaterThan(Addon.Setting(source.schedule.when),0) + SubString(Addon.Setting(download.new.trailers),true,left) + !IsEmpty(Addon.Setting(trailer.save.folder))"/-->
+        <setting label="30102" type="lsep"/>
+        <setting label="30170" type="enum" id="search.type" default="0" lvalues="30171|30172|30173"/>
+        <setting label="30180" subsetting="true" type="bool" id="search.whole.words" default="false" enable="!IntegerGreaterThan(Addon.Setting(search.type),1)"/>
+        <setting label="30185" type="bool" id="search.current.list" default="false"/>
+        <setting label="30190" type="enum" id="search.highlight.color" default="0" lvalues="30191|30192|30193|30194|30195|30196"/>
+    </category>
+
+    <!-- Trailers -->
+    <category label="30052" id="category.trailers">
+        <setting label="30200" type="lsep"/>
+        <setting label="30210" type="fileenum" id="trailer.scraper" default="Apple Movie Trailers - Lite" mask=".xml" option="hideext" values="$CWD/resources/scrapers/trailers"/>
+        <setting label="30201" type="lsep"/>
+        <setting label="30220" type="enum" id="trailer.play.mode" default="0" lvalues="30221|30222|30223"/>
+        <setting label="30160" subsetting="true" type="slider" id="download.rate.limit" default="1550" range="50,50,1550" format="%1.f $ADDON[$ID 30162],,$ADDON[$ID 30161]" enable="IntegerGreaterThan(Addon.Setting(trailer.play.mode),0)"/>
+        <setting label="30230" type="enum" id="trailer.multiple" default="0" lvalues="30231|30232|30233"/>
+        <setting label="30202" type="lsep"/>
+        <setting label="30240" type="enum" id="trailer.limit.mpaa" default="4" lvalues="30810|30811|30812|30813|30815"/>
+        <setting label="30250" subsetting="true" type="enum" id="trailer.nr.mpaa" default="2" lvalues="30810|30811|30812|30813|30814" enable="!IntegerGreaterThan(Addon.Setting(trailer.limit.mpaa),3)"/>
+        <setting label="30203" type="lsep"/>
+        <setting label="30260" type="enum" id="trailer.quality" default="0" lvalues="30261|30262|30263|30264"/>
+        <setting label="30270" subsetting="true" type="bool" id="trailer.hd.only" default="false" enable="IntegerGreaterThan(Addon.Setting(trailer.quality),1)"/>
+        <setting label="30204" type="lsep"/>
+        <setting label="30275" type="folder" id="trailer.save.folder" default="" source="auto" option="writeable"/>
+        <setting label="30280" subsetting="true" type="bool" id="trailer.save.movie" default="false" enable="!IsEmpty(Addon.Setting(trailer.save.folder))"/>
+        <setting label="30285" subsetting="true" type="bool" id="trailer.use.title" default="false" enable="!IsEmpty(Addon.Setting(trailer.save.folder))"/>
+        <setting label="30290" subsetting="true" type="bool" id="trailer.add.trailer" default="true" enable="!IsEmpty(Addon.Setting(trailer.save.folder))"/>
+    </category>
+
+    <!-- Categories -->
+    <category label="30053" id="category.categories">
+        <setting label="30300" type="lsep"/>
+        <setting label="$ADDON[$ID 30310] $ADDON[$ID 30111]" type="bool" id="category1" default="true"/>
+        <setting label="$ADDON[$ID 30310] $ADDON[$ID 30112]" type="bool" id="category2" default="true"/>
+        <setting label="$ADDON[$ID 30310] $ADDON[$ID 30113]" type="bool" id="category3" default="true"/>
+        <setting label="$ADDON[$ID 30310] $ADDON[$ID 30114]" type="bool" id="category4" default="true"/>
+        <setting label="$ADDON[$ID 30310] $ADDON[$ID 30115]" type="bool" id="category5" default="true"/>
+        <setting label="$ADDON[$ID 30310] $ADDON[$ID 30116]" type="bool" id="category6" default="true"/>
+        <setting label="$ADDON[$ID 30310] $ADDON[$ID 30117]" type="bool" id="category7" default="true"/>
+        <setting label="$ADDON[$ID 30310] $ADDON[$ID 30118]" type="bool" id="category8" default="true"/>
+        <setting label="$ADDON[$ID 30310] $ADDON[$ID 30119]" type="bool" id="category9" default="true"/>
+        <setting label="$ADDON[$ID 30310] $ADDON[$ID 30120]" type="bool" id="category10" default="true"/>
+        <setting label="$ADDON[$ID 30310] $ADDON[$ID 30121]" type="bool" id="category11" default="true"/>
+        <setting label="$ADDON[$ID 30310] $ADDON[$ID 30122]" type="bool" id="category12" default="true"/>
+    </category>
+
+    <!-- Showtimes -->
+    <category label="30054" id="category.showtimes">
+        <setting label="30400" type="lsep"/>
+        <setting label="30410" type="text" id="showtimes.location" default="90210"/>
+        <setting label="30401" type="lsep"/>
+        <setting label="30420" type="fileenum" id="showtimes.scraper" default="Google" mask=".xml" option="hideext" values="$CWD/resources/scrapers/showtimes/" enable="!IsEmpty(Addon.Setting(showtimes.location))"/>
+        <setting label="30430" type="enum" id="showtimes.scraper.day" default="0" lvalues="30431|30432|30433|30434|30435|30436|30437|30438|30439|30440" enable="!IsEmpty(Addon.Setting(showtimes.location))"/>
+        <setting label="30450" type="enum" id="showtimes.scraper.fallback.list.type" default="0" lvalues="30451|30452" enable="!IsEmpty(Addon.Setting(showtimes.location))"/>
+    </category>
+
+    <!-- Skinning -->
+    <category label="30055" id="category.skinning">
+        <setting label="30500" type="lsep"/>
+        <setting label="30510" type="enum" id="fanart.type" default="0" lvalues="30511|30512"/>
+        <setting label="30520" subsetting="true" type="folder" id="fanart.path" default="" source="auto" visible="StringCompare(Addon.Setting(fanart.type),0)"/>
+        <setting label="30525" subsetting="true" type="image" id="fanart.image" default="" source="auto" visible="StringCompare(Addon.Setting(fanart.type),1)"/>
+        <setting label="30501" type="lsep"/>
+        <setting label="30550" type="enum" id="label2mask" default="0" lvalues="30551|30552|30553|30554|30555"/>
+        <setting label="30502" type="lsep"/>
+        <setting label="$ADDON[$ID 30530] #1" type="enum" id="quick.link1" default="1" lvalues="30531|30111|30112|30113|30114|30115|30116|30117|30118|30119|30120|30121|30122|30123"/>
+        <setting label="$ADDON[$ID 30530] #2" type="enum" id="quick.link2" default="2" lvalues="30531|30111|30112|30113|30114|30115|30116|30117|30118|30119|30120|30121|30122|30123"/>
+        <setting label="$ADDON[$ID 30530] #3" type="enum" id="quick.link3" default="3" lvalues="30531|30111|30112|30113|30114|30115|30116|30117|30118|30119|30120|30121|30122|30123"/>
+        <setting label="$ADDON[$ID 30530] #4" type="enum" id="quick.link4" default="4" lvalues="30531|30111|30112|30113|30114|30115|30116|30117|30118|30119|30120|30121|30122|30123"/>
+        <setting label="$ADDON[$ID 30530] #5" type="enum" id="quick.link5" default="5" lvalues="30531|30111|30112|30113|30114|30115|30116|30117|30118|30119|30120|30121|30122|30123"/>
+        <setting label="30503" type="lsep"/>
+        <!-- The setting  recent.media.type  is to be used for setting properties for skinners to use like recently added movies -->
+        <setting label="30540" type="enum" id="recent.media.type" default="0" lvalues="30541|30111|30122|30119|30120"/>
+        <setting label="30545" subsetting="true" type="enum" id="recent.media.count" default="4" values="1|2|3|4|5|6|7|8|9|10" enable="IntegerGreaterThan(Addon.Setting(recent.media.type),0)"/>
+        <setting label="30504" type="lsep"/>
+        <setting label="30560" type="enum" id="screensaver.playfrom" default="1" lvalues="30561|30562|30563"/>
+        <setting label="30570" type="slider" id="screensaver.limit" default="11" range="1,1,11" format="%1.f,,$ADDON[$ID 30571]"/>
+        <setting label="30580" type="bool" id="screensaver.mute_volume" default="false"/>
+    </category>
+
+	<!-- Maintenance -->
+	<category label="30056" id="category.maintenance">
+		<setting type="sep"/>
+		<setting label="[B]$ADDON[$ID 30750][/B]" type="text" default="$AUTHOR" enable="false"/>
+		<setting label="[B]$ADDON[$ID 30752][/B]" type="text" id="repo" default="http://xbmc-addons.googlecode.com/" enable="false"/>
+		<setting label="[B]$ADDON[$ID 30753][/B]" type="text" id="branch" default="svn/addons/" visible="false"/>
+		<setting label="[B]$ADDON[$ID 30754][/B]" type="text" default="$ADDON[$ID 30010]" enable="false"/>
+		<!-- setting label="[B]$ADDON[$ID 30755][/B]" type="text" default="" enable="false"/-->
+		<setting type="sep"/>
+		<setting label="30600" type="lsep"/>
+		<setting label="30610" type="action" action="RunScript($ID,view='changelog')" visible="System.HasAddon(script.module.pysvn)"/>
+		<setting label="30615" type="action" action="RunScript($ID,view='readme')"/>
+		<setting label="30620" type="action" action="RunScript($ID,view='license')"/>
+		<!-- setting label="30625" type="action" action="RunScript($ID,view='properties')"/-->
+		<setting label="30601" type="lsep"/>
+		<setting label="30650" type="action" action="RunScript($ID,task='check_for_updates')"/>
+        <setting label="30655" type="action" action="RunScript($ID,task='clear_source')"/>
+        <setting label="30660" type="action" action="RunScript($ID,task='clear_watched')"/>
+        <setting label="30665" type="action" action="RunScript($ID,task='export_library')"/>
+        <setting label="30670" type="action" action="RunScript($ID,task='clean_library')"/>
+    </category>
+
+	<!-- Global Search -->
+	<category label="30059" id="category.globalsearch" visible="false">
+       <setting id="globalsearch.category" type="text" visible="false" default="30090"/>
+       <setting id="globalsearch.sql" type="text" visible="false" default="SELECT * FROM trailers"/>
+    </category>
+
+</settings>

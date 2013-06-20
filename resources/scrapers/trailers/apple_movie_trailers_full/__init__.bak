@@ -1,0 +1,286 @@
+## Trailers scraper for http://trailers.apple.com/ (full)
+
+# set settings before importing helper module, so they are available to helper module
+__SETTINGS__ = {
+    # user agent
+    "useragent": "QuickTime/7.6.5 (qtver=7.6.5;os=Windows NT 5.1Service Pack 3)",
+    # allowed categories - 1: recently added, 2: genres, 3: studios, 4: directors, 5: actors, 6: HD only, 7: in theaters
+    "categories": [ 1, 2, 3, 5, 6, 7 ],
+    # supports search
+    "search": True
+}
+
+# main imports
+import os
+import xbmc
+from urllib import quote_plus
+import re
+from resources.lib.utils import Addon, translatePath
+import resources.scrapers.trailers.helper as helper
+from pysqlite2 import dbapi2 as sqlite
+
+
+class Scraper:
+    # base paths
+    BASE_SOURCE_PATH = xbmc.validatePath( os.path.join( Addon.getSetting( "source_cache_path" ), __name__.split( "." )[ -1 ], "source" ) )
+    ##BASE_DATABASE_PATH = os.path.join( translatePath( Addon.getAddonInfo( "Profile" ) ), __name__.split( "." )[ -1 ], "amt.db" )
+    BASE_DATABASE_PATH = translatePath( os.path.join( Addon.getSetting( "source_cache_path" ), __name__.split( "." )[ -1 ], "amt.db" ) )
+
+    def __init__( self, settings, media_window=None ):
+        # set passed info
+        self.settings = settings
+        self.media_window = media_window
+        # get helper class
+        self.helper = helper.Helper( self.BASE_SOURCE_PATH, settings, media_window, __SETTINGS__ )
+        # connect to database
+        self.db = sqlite.connect( self.BASE_DATABASE_PATH )#, detect_types=sqlite.PARSE_DECLTYPES|sqlite.PARSE_COLNAMES)
+        # used for searching
+        self.db.create_function( "regexp", 2, self.regexp )
+    
+    def regexp( self, pattern, item ):
+        return re.search( pattern, item, re.IGNORECASE ) is not None
+
+    def fetch_trailers( self, category=None ):
+        # spam log file
+        xbmc.log( "-" * 70, level=xbmc.LOGDEBUG )
+        xbmc.log( ">>> fetch_trailers(category: %s, rating: %s, quality: %s)" % ( repr( category ), [ "G", "PG", "PG-13", "R", "NC-17", "No Limit" ][ self.settings[ "trailer_limit_mpaa" ] ], self.settings[ "trailer_quality" ], ), level=xbmc.LOGDEBUG )
+        xbmc.log( "-" * 70, level=xbmc.LOGDEBUG )
+        # initialize our status variable
+        ok = False
+        # if no db, create one and fetch xml source
+        version, complete = self._get_version()
+        # TODO: compare version or other check to verify data complete
+        # if category is downloaded, get listing
+        if ( category.startswith( "downloaded:" ) ):
+            # get trailers
+            trailers = self.helper.get_downloaded_list()
+            # add items to our media list TODO: determine if this is actually faster
+            ok = self.media_window.addItems( trailers )
+        # if category is category list, get categories
+        elif ( category.startswith( "categorylist:" ) ):
+            # get categories
+            ok = self.helper.get_category_list()
+        # if category is genre, studio, director or actor. we handle these as virtual folders
+        elif ( category in [ u"genre", u"studio", u"director", u"actor" ] ):
+            ok = self._fetch_categories( category )
+        else:
+            ok = self._fetch_trailers( category )
+        # spam log file
+        xbmc.log( "-" * 70, level=xbmc.LOGDEBUG )
+        xbmc.log( "<<< fetch_trailers()", level=xbmc.LOGDEBUG )
+        xbmc.log( "-" * 70, level=xbmc.LOGDEBUG )
+        # return result
+        return ok
+
+    def _get_version( self ):
+        try:
+            # initialize version to None
+            refresh = complete = None
+            # get version as a test
+            version, complete, source_date = self.db.execute( "SELECT version, complete, source_date FROM version;" ).fetchone()
+            # get refresh
+            refresh = self.helper.get_source_refresh( expires=7, source=source_date )
+            # rasie an error to force a refresh
+            if ( refresh or not complete ): raise
+        except:
+            # import parser module
+            import parser
+            # set refresh to True TODO: Do we want this?
+            #refresh = True
+            # create database and fill
+            version, complete = parser.Database( self.settings, self.helper, self.db, complete is None, refresh )._create_database()
+        # return results
+        return version, complete
+
+    def _fetch_categories( self, category ):
+        # initialize categories list
+        categories = []
+        # fetch records
+        movies = self.db.execute( "SELECT * FROM %s WHERE %s != ''" % ( category, category, ) ).fetchall()
+        # create our list
+        for movie in movies:
+            categories += [ [ movie[ 1 ], "Default%s.png" % category.title(), None ] ]
+        # closse db
+        self.db.close()
+        # add categories to our media list
+        return self.helper.add_categories( category, categories )
+
+    def _search_trailers( self, category ):
+        # get kind of list
+        kind, _search = category.split( ": " )
+        # set spliiter
+        splitter = [ " ", "\n" ][ self.settings[ "search_exact_phrase" ] ]
+        pattern = [ "%s", "\\b%s\\b" ][ self.settings[ "search_whole_words" ] ]
+        # iterate thru and set our params list
+        params = ()
+        for param in _search.split( splitter ):
+            params += ( pattern % ( param, ), pattern % ( param, ), pattern % ( param, ), )
+        # set our search sql TODAY "AND" or "OR" maybe another setting
+        s_sql = " AND ".join( [ "(title REGEXP ? OR plot REGEXP ? OR movie.cast REGEXP ?)" for count in range( len( params ) / 3 ) ] )
+        # main sql
+        sql = """
+                    SELECT list.*, genre.genre
+                    FROM genre_link_movie, genre,
+                        (
+                            SELECT movie.*
+                            FROM movie
+                            WHERE %s
+                            AND trailer_urls IS NOT NULL AND trailer_urls != '[]'
+                            %s
+                            %s
+                        ) AS list
+                    WHERE genre_link_movie.idMovie = list.idMovie
+                    AND genre_link_movie.idGenre = genre.idGenre;
+                """ % ( ( s_sql, ) + self._get_limits() )
+        print sql
+        print params
+        # fetch record
+        records = self._fetch_records( sql, params )
+        return records
+
+    def _fetch_trailers( self, category ):
+        ok = False
+        # helper handles setting trailer listitem for downloaded lists
+        if ( category.startswith( "downloaded:" ) ):
+            # get folder listing
+            items = self.helper.get_downloaded_list()
+        else:
+            if ( category.startswith( "search:" ) ):
+                records = self._search_trailers( category )
+            else:
+                # change recent to newest FIXME: adjust the sql to fetch a proper recently added list
+                if ( category.startswith( "recent:" ) ):
+                    kind = "genre"
+                    params = ( 30, )
+                    limit_sql = "GROUP BY genre_link_movie.idMovie ORDER BY updated DESC LIMIT ?"
+                else:
+                    # get kind of list
+                    kind, selection = category.split( ": " )
+                    limit_sql = "AND %s_link_movie.id%s = ?" % ( kind, kind, )
+                    # fetch id
+                    params = self.db.execute( "SELECT id%s FROM %s WHERE %s = ?" % ( kind, kind, kind, ), ( selection, ) ).fetchone()
+                # get HD and MPAA rating limits sql and format sql
+                sql = """
+                            SELECT list.*, genre.genre
+                            FROM genre_link_movie, genre,
+                                (
+                                    SELECT movie.*
+                                    FROM movie, %s_link_movie
+                                    WHERE %s_link_movie.idMovie = movie.idMovie
+                                    AND trailer_urls IS NOT NULL AND trailer_urls != '[]'
+                                    %s
+                                    %s
+                                    %s
+                                ) AS list
+                            WHERE genre_link_movie.idMovie = list.idMovie
+                            AND genre_link_movie.idGenre = genre.idGenre;
+                        """ % ( ( kind, kind, limit_sql, ) + self._get_limits() )
+                # fetch record
+                records = self._fetch_records( sql, params )
+            try:
+                # initialize our items list
+                items = []
+                # iterate thru and set our items
+                for movie in records:
+                    # get trailers and info
+                    trailers = eval( movie[ 3 ] )
+                    # format trailer titles
+                    trailer_titles = " / ".join( [ trailer[ -1 ][ 0 ].replace( " (Medium)", "" ).replace( " (Large)", "" ).replace( " 480p", "" ).replace( " 720p", "" ).replace( " 1080p", "" ) for trailer in trailers ] )
+                    # choose last trailer and 1080p format, just for details (should be the most recent trailer)
+                    trailer = trailers[ -1 ][ -1 ][ 6 ]
+                    # format duration
+                    duration = "%d:%02d" % divmod( float( trailers[ -1 ][ -1 ][ 2 ] ), 60 ) #( float( trailers[ -1 ][ -1 ][ 2 ] ) / 60, float( trailers[ -1 ][ -1 ][ 2 ] ) % 60 )
+                    # format postdate
+                    postdate = trailers[ -1 ][ -1 ][ 5 ].split( "T" )[ 0 ]
+                    # format mpaa rating
+                    mpaa = [ movie[ 6 ], "Rated %s" % ( movie[ 6 ], ) ][ movie[ 6 ] != "" and movie[ 6 ] != "Not yet rated" and movie[ 6 ] != "NR" ]
+                    # format the release date
+                    releasedate = self.helper.format_date( movie[ 9 ] )
+                    # add the item to our list
+                    items += [ self.helper.set_trailer( { "title": movie[ 1 ], "duration": duration, "mpaa": mpaa, "studio": movie[ 7 ], "postdate": postdate, "releasedate": releasedate, "copyright": movie[ 10 ], "director": "", "plot": movie[ 5 ], "cast": eval( movie[ 8 ] ), "genre": movie[ 12 ], "poster": movie[ 4 ], "trailer": trailer, "size": 0, "available_trailers": trailer_titles } ) ]
+            except Exception, e:
+                # oops, notify user what error occurred
+                xbmc.log( str( e ), level=xbmc.LOGERROR )
+        # add items  to our media list TODO: determine if this is actually faster
+        if ( items ):
+            return self.media_window.addItems( items )
+        # return success
+        return ok
+
+    def _get_limits( self ):
+        # hd only sql
+        hd_sql = [ "", "AND (trailer_urls LIKE '%(HD 1080p)%' OR trailer_urls LIKE '%(HD 720p)%')" ][ self.settings[ "trailer_hd_only" ] and ( self.settings[ "trailer_quality" ] == "720p" or self.settings[ "trailer_quality" ] == "1080p" ) ]
+        # if the user set a valid rating add all up to the selection
+        rating_sql = [ "", "AND (%s) " % ( " OR ".join( "mpaa='%s'" % mpaa for mpaa in [ "NR", "Not yet rated", "G", "PG", "PG-13", "R", "NC-17" ][ 2 * ( self.settings[ "trailer_nr_mpaa" ] > self.settings[ "trailer_limit_mpaa" ] ) : self.settings[ "trailer_limit_mpaa" ] + 3 ] ), ) ][ self.settings[ "trailer_limit_mpaa" ] < 4 ]
+        #return sql statements
+        return hd_sql, rating_sql
+
+    """
+    def get_movie_details( self, title, getmoviepath, playurl ):##, url ):
+        # get path of movie if in database
+        moviepath = self.helper.get_movie_path( [ None, title ][ getmoviepath ] )
+        # sql statement
+        sql = """
+                    SELECT list.*, genre.genre
+                    FROM genre_link_movie, genre,
+                        (
+                            SELECT *
+                            FROM movie
+                            WHERE title=?
+                        ) AS list
+                    WHERE genre_link_movie.idMovie = list.idMovie
+                    AND genre_link_movie.idGenre = genre.idGenre;
+                """
+        # fetch movie
+        movie = self._fetch_records( sql, ( title, ) )[ 0 ]
+        # eval into a list
+        trailers = eval( movie[ 3 ] )
+        # check if this is an all hd list
+        hd = xbmc.getInfoLabel( "Container.Property(PluginCategory)" ) == Addon.getLocalizedString( 30587 )
+        # use this for random trailer otherwise play all
+        ##trailers = [ random.choice( trailers ) ]
+        # initialize our trailer urls
+        urls = []
+        # iterate thru and find best trailer url
+        for trailer in trailers:
+            # get intial choice
+            selection = len( trailer ) - 1
+            # select the preferred trailer
+            while ( ( ( ( hd or self.settings[ "trailer_quality" ] != "Standard" ) and self.settings[ "trailer_quality" ] not in trailer[ selection ][ 6 ] ) or ( self.settings[ "trailer_quality" ] == "Standard" and "480p" in trailer[ selection ][ 6 ] or "720p" in trailer[ selection ][ 6 ] or "1080p" in trailer[ selection ][ 6 ] ) ) and selection != -1 ):
+                selection -= 1
+            # format duration
+            duration = "%d:%02d" % divmod( int( trailer[ selection ][ 2 ] ), 60 )#( int( trailer[ selection ][ 2 ] ) / 60, int( trailer[ selection ][ 2 ] ) % 60 )
+            # set url, -1 should be the best quality available and should work TODO: verify this
+            urls += [ [ trailer[ selection ][ 0 ].replace( " (Medium)", "" ).replace( " (Large)", "" ).replace( " (HD 480p)", "" ).replace( " 720p", "" ).replace( " 1080p", "" ), trailer[ selection ][ 6 ] + "|User-Agent=%s" % ( quote_plus( __SETTINGS__[ "useragent" ] ), ), duration, trailer[ selection ][ 5 ].split( "T" )[ 0 ] ] ]
+        # format the release date
+        releasedate = self.helper.format_date( movie[ 9 ] )
+        # format tagline
+        movie += [ [ "", "In Theaters %s" % releasedate ][ releasedate != "" ] ]
+        # set trailers
+        movie[ 3 ] = urls
+        # added for director
+        movie[ 2 ] = ""
+        # format cast
+        movie[ 8 ] = " / ".join( eval( movie[ 8 ] ) )
+        # return movie details
+        return movie, moviepath
+        """
+
+    def _fetch_records( self, sql, params ):
+        print ["PARAMS", params]
+        # grab trailer info "SELECT * FROM movies WHERE title=?;"
+        records = self.db.execute( sql, params ).fetchall()
+        # we're done, close db
+        self.db.close()
+        # initialize our dictionary
+        movies = {}
+        # we combine all genres for each movie here
+        for movie in records:
+            # add genre to existing trailer
+            if ( movies.has_key( movie[ 0 ] ) ):
+                movies[ movie[ 0 ] ][ -1 ] = movies[ movie[ 0 ] ][ -1 ] + " / " + movie[ -1 ]
+            # add the trailer to our dict
+            else:
+                movies[ movie[ 0 ] ] = list( movie )
+        # return results
+        return movies.values()
